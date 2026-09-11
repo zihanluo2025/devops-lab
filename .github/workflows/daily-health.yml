@@ -1,0 +1,41 @@
+name: Daily Health Check
+
+on:
+  schedule:
+    # GitHub Actions cron uses UTC
+    # 12:30 UTC is about 10:00 PM Adelaide in standard time
+    - cron: "30 12 * * *"
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  health-report:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate repository health report
+        run: |
+          chmod +x scripts/generate-health-report.sh
+          ./scripts/generate-health-report.sh
+
+      - name: Commit report if changed
+        run: |
+          if git diff --quiet -- reports/latest.md; then
+            echo "No report changes. Nothing to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add reports/latest.md
+          git commit -m "chore: update automated repository health report"
+          git push

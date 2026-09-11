@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Python
+        run: python -m py_compile app/app.py
+
+      - name: Build Docker image
+        run: docker build -t devops-lab:ci .
+
+      - name: Run container
+        run: |
+          docker run -d --name devops-lab -p 8080:8080 devops-lab:ci
+          sleep 3
+          curl --fail http://localhost:8080/health
+
+      - name: Validate Kubernetes YAML
+        run: |
+          python - <<'PY'
+          import pathlib
+
+          for path in pathlib.Path("kubernetes").glob("*.yaml"):
+              text = path.read_text()
+              assert "apiVersion:" in text
+              assert "kind:" in text
+              print(f"Validated {path}")
+          PY
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform format check
+        run: terraform -chdir=terraform fmt -check
